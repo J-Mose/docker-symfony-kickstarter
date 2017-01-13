@@ -1,0 +1,67 @@
+version: "2.1"
+
+# specify a project's unique network to avoid conflict
+networks:
+    test_project_trunk:
+        driver: bridge
+
+services:
+
+    # https://hub.docker.com/r/miveo/centos-httpd-for-phpfpm/
+    apache:
+        image: miveo/centos-httpd-for-phpfpm
+        volumes:
+            # this volume share the specific project vhost/httpd configuration
+            - ./apache/my_project.conf:/etc/httpd/conf.d/my-project.conf
+            # this volume share the symofny project
+            - ../:/var/www/symfony
+        ports:
+            - 8080:80
+        env_file:
+            - .env
+        networks:
+            - test_project_trunk
+
+    # https://hub.docker.com/r/miveo/centos-php-fpm/
+    php:
+        image: miveo/centos-php-fpm:7.0
+        tty: true
+        volumes_from:
+            - apache
+        volumes:
+            # this volume share the php.ini project configuration
+            - ./php/99-my-project.ini:/etc/php.d/99-my-project.ini
+        env_file:
+            - .env
+        networks:
+            - test_project_trunk
+
+    # https://hub.docker.com/_/postgres/
+    db:
+        image: postgres
+        environment:
+            - POSTGRES_USER=${SYMFONY__DATABASE_USER}
+            - POSTGRES_PASSWORD=${SYMFONY__DATABASE_PASSWORD}
+            - POSTGRES_DB=${SYMFONY__DATABASE_NAME}
+            - POSTGRES_PORT=${SYMFONY__DATABASE_PORT}
+        volumes:
+            # named local volume to persist postgres data 
+            - test_project_trunk_pgdata:/var/lib/postgresql/data
+        networks:
+            - test_project_trunk
+        ports:
+            - 5432:5432
+
+    # https://hub.docker.com/r/jderusse/mailcatcher/
+    mailcatcher:
+        image: jderusse/mailcatcher
+        networks:
+            - test_project_trunk
+        ports:
+            - 8081:80
+
+# name the postgres data volume
+volumes:
+    test_project_trunk_pgdata:
+        driver: local
+
